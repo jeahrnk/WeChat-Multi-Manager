@@ -1,12 +1,12 @@
 # WeChat Multi Manager
 
 <p align="center">
-  <strong>macOS 微信多开管理工具</strong><br>
-  新建 · 升级 · 修复签名 · 导入旧副本 · 安全删除 —— 一个脚本统一管理
+  <strong>macOS 微信多实例管理工具</strong><br>
+  新建 · 升级 · 修复 · 导出导入 · 数据管理 —— 一个工具统一管理多个微信副本
 </p>
 
 <p align="center">
-  支持 macOS 13+ · Apple Silicon / Intel · 当前版本 v1.5.5
+  支持 macOS 13+ · Apple Silicon / Intel · 当前版本 v1.6.1
 </p>
 
 ---
@@ -34,7 +34,17 @@ WeChat Multi Manager 通过**复制并重新签名**微信副本，让 macOS 将
 
 ### 第一步：下载
 
-**推荐：双击运行版**（不熟悉终端的用户）
+**推荐：一键安装**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/install.sh | zsh
+```
+
+默认安装到 `~/Applications/WeChat-Multi-Manager/`，包含终端版与双击版（当前 v1.6.1）。
+
+自定义目录：`INSTALL_DIR=~/Desktop/WeChat-Multi-Manager curl -fsSL ... | zsh`
+
+**或手动下载：双击运行版**（不熟悉终端的用户）
 
 ```bash
 curl -O https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/WeChat-Multi-Manager.command
@@ -70,11 +80,13 @@ chmod +x wechat-multi.sh
 
 | 你想做什么 | 选菜单 |
 |-----------|--------|
-| 第一次多开一个账号 | `1` 新建 |
-| 已有旧的多开（如 WeChat-Work.app） | `10` 导入 |
-| 微信官方更新后，同步多开版本 | `3` 升级全部 |
-| 打开提示「已损坏」 | `4` 修复签名 |
-| 先看看、不改动 | `6` 或 `8` |
+| 第一次多开一个账号 | `4` 新建 |
+| 已有旧的多开（如 WeChat-Work.app） | `5` 导入 |
+| 微信官方更新后，同步多开版本 | `7` 升级全部 |
+| 打开提示「已损坏」 | `8` 修复签名 |
+| 打开多开数据目录 / 查看占用 | `9` 或 `10`（均先选副本） |
+| 换电脑：导出 / 导入完整备份 | `11` 导出 → U 盘拷走 → 新电脑 `12` 导入 |
+| 先看看、不改动 | `1` 或 `2` |
 | 退出 | `0` |
 
 新建完成后，在启动台或 `/Applications/` 中找到 `WeChat-Multi-<名称>.app`，像普通 App 一样打开登录即可。
@@ -85,7 +97,7 @@ chmod +x wechat-multi.sh
 
 ### 场景 A：第一次创建一个多开微信
 
-1. 运行脚本，选 `1) 新建一个多开微信`
+1. 运行脚本，选 `4) 新建一个多开微信`
 2. 输入名称，例如 `work` 或 `personal`（仅英文、数字、下划线、短横线）
 3. 按提示输入 Mac 登录密码（sudo）
 4. 等待复制与签名完成
@@ -95,11 +107,11 @@ chmod +x wechat-multi.sh
 
 若你之前手动复制过 `WeChat-Work.app` 等副本：
 
-1. 选 `10) 导入已有多开微信`
+1. 选 `5) 导入已有多开微信`
 2. 选择要导入的 App，确认
 3. 导入后列表显示 `[托管]`，可像新建副本一样升级、修复、删除
 
-> 导入只写入托管记录和 marker，不会重建 App。若签名异常，导入后选 `4) 修复签名`。
+> 导入只写入托管记录和 marker，不会重建 App。若签名异常，导入后选 `8) 修复签名`。
 
 ### 场景 C：微信官方发布新版本
 
@@ -107,8 +119,8 @@ chmod +x wechat-multi.sh
 
 ```text
 ① 在 App Store 或微信内更新原版 WeChat.app
-② 运行本脚本，选 6) 检查更新状态 —— 确认哪些副本需要升级
-③ 选 3) 升级全部（或多个时选 2) 升级某一个）
+② 运行本脚本，选 2) 检查更新状态 —— 确认哪些副本需要升级
+③ 选 7) 升级全部（或多个时选 6) 升级某一个）
 ④ 输入密码，等待完成
 ⑤ 分别打开原版与多开，确认可正常登录
 ```
@@ -128,20 +140,62 @@ chmod +x wechat-multi.sh
 ## 菜单说明
 
 ```
- 1)  新建一个多开微信
- 2)  升级某一个多开微信
- 3)  升级全部多开微信
- 4)  修复某一个多开微信签名
- 5)  删除某一个多开微信
- 6)  检查更新状态
- 7)  查看详细信息
- 8)  只查看列表，不操作
- 9)  恢复升级失败留下的备份
-10)  导入已有多开微信
+ 查看
+ 1)  只查看列表，不操作
+ 2)  检查更新状态
+ 3)  查看详细信息
+
+ 创建与升级
+ 4)  新建一个多开微信
+ 5)  导入已有多开微信
+ 6)  升级某一个多开微信
+ 7)  升级全部多开微信
+
+ 维护与数据
+ 8)  修复某一个多开微信签名
+ 9)  打开多开微信数据目录
+10)  检查某一个多开微信数据占用
+11)  导出某一个多开微信到桌面文件夹
+12)  从文件夹导入多开微信
+
+ 其他
+13)  删除某一个多开微信
+14)  恢复升级失败留下的备份
+
  0)  退出
 ```
 
 脚本采用**循环菜单**：执行完一项自动返回菜单，选 `0` 退出。需要复制、签名、删除时会提示输入 Mac 登录密码。
+
+### 界面预览
+
+启动后大致如下（具体列表因机器而异）：
+
+```text
+======================================
+  WeChat Multi Manager  v1.6.1
+======================================
+
+发现以下多开微信：
+
+✅ 1) WeChat-Multi-work
+      路径：/Applications/WeChat-Multi-work.app
+      Bundle ID：com.tencent.xinWeChat.multi.work
+      状态：版本一致
+
+────────────────────────────────────
+请选择操作：
+
+  查看
+  1)  只查看列表，不操作
+  ...
+  0)  退出
+────────────────────────────────────
+
+输入数字：
+```
+
+> 欢迎补充截图 PR：将菜单界面截图放入 `docs/screenshots/`，README 会自动展示。
 
 ---
 
@@ -168,6 +222,11 @@ chmod +x wechat-multi.sh
 | 删除副本 | 移入废纸篓，可恢复，不直接永久删除 |
 | 检查更新 | 哪些副本落后一目了然 |
 | 导入旧副本 | 手动多开（如 WeChat-Work）纳入统一管理 |
+| 打开数据目录 | 在访达中定位多开微信的 Containers 目录 |
+| 检查占用 | 选定副本后查看其 Containers 数据体积 |
+| 导出备份 | 将 App + 聊天数据打包到桌面文件夹（导出前检查桌面空间） |
+| 导入备份 | 从文件夹恢复 App、数据并纳入托管管理（导入前自动检查磁盘空间） |
+| 启动自检 | 新建/升级/导入后可选择验证副本能否启动（默认 Y，检测后副本保持运行） |
 | 事务式升级 | 升级前自动备份，失败自动还原 |
 | 恢复备份 | 升级中断时找回 `.backup` 残留 |
 | 托管记录 | 改名、改 ID 后仍能识别副本 |
@@ -203,6 +262,46 @@ chmod +x wechat-multi.sh
 
 ---
 
+## 聊天记录在哪里
+
+微信的聊天记录、缓存、登录状态**不在** `/Applications/WeChat.app` 里，而在用户目录下按 **Bundle ID** 隔离存储。
+
+### 原版微信
+
+```text
+~/Library/Containers/com.tencent.xinWeChat
+~/Library/Group Containers/5A4RE8SF68.com.tencent.xinWeChat   # 示例，Team ID 因机器而异
+```
+
+### 多开 / 导入副本
+
+每个副本有独立 Bundle ID，数据目录也不同：
+
+```text
+~/Library/Containers/<Bundle ID>
+```
+
+示例：
+
+| 副本 | Bundle ID | 数据目录 |
+|------|-----------|----------|
+| `WeChat-Multi-work.app` | `com.tencent.xinWeChat.multi.work` | `~/Library/Containers/com.tencent.xinWeChat.multi.work` |
+| `WeChat-Work.app`（导入） | `com.tencent.xinWeChat.work` | `~/Library/Containers/com.tencent.xinWeChat.work` |
+
+关联的 **Group Containers** 目录名通常带 Team ID 前缀（如 `5A4RE8SF68.com.tencent.xinWeChat`），不一定包含完整 Bundle ID。脚本会通过 entitlements 和 metadata 自动发现。
+
+### 在脚本里怎么查看
+
+| 需求 | 菜单 |
+|------|------|
+| 在访达中打开数据目录 | `9) 打开多开微信数据目录` |
+| 查看占用体积 | `10) 检查某一个多开微信数据占用` |
+| 换电脑完整备份 | `11) 导出` → `12) 导入` |
+
+> **删除多开副本**（菜单 13）只移走 `/Applications/` 里的 `.app`，不会自动删除上述数据目录。若不再需要该账号数据，需自行清理对应 `Containers` 目录。
+
+---
+
 ## 文件与数据
 
 ### 仓库文件
@@ -211,6 +310,7 @@ chmod +x wechat-multi.sh
 |------|------|
 | `wechat-multi.sh` | 主脚本，终端运行 |
 | `WeChat-Multi-Manager.command` | 同上，支持双击运行 |
+| `install.sh` | 一键下载安装脚本 |
 | `CHANGELOG.md` | 版本更新记录 |
 
 ### 运行时数据
@@ -224,18 +324,37 @@ chmod +x wechat-multi.sh
 
 ---
 
+## 故障排查
+
+遇到问题先查日志：`~/Library/Logs/WeChatMultiManager/`（每次运行一个文件）。
+
+| 现象 | 可能原因 | 处理 |
+|------|----------|------|
+| 提示「已损坏，无法打开」 | ad-hoc 签名 / xattr 异常 | 菜单 `8` 修复签名；不行再用 `6` 升级重建 |
+| 升级后打不开 | 原版微信未先更新 | 先更新原版，再菜单 `7` 升级全部 |
+| 导入/导出中途失败 | 磁盘空间不足 | 查看预检提示；清理桌面或系统盘空间后重试 |
+| 导入后无聊天记录 | 备份无 Containers 或未完整复制 | 确认备份文件夹含 `Library/Containers/`；重新导出 |
+| 列表里没有我的多开 | 未被识别为副本 | 选手动多开时用 `5` 导入；或检查是否在 `/Applications/` |
+| 脚本闪退 / `name=` 刷屏 | 旧版本或 shell 配置干扰 | 更新到最新版；用 `zsh wechat-multi.sh` 运行 |
+| sudo 失败后状态不一致 | 极少见（v1.6.1 已修） | 更新到 v1.6.1+；检查 `managed_apps.json` 与 App marker |
+| 启动自检未通过 | 首次打开较慢 / 安全提示 | 手动打开副本；或选 `n` 跳过自检 |
+
+**仍无法解决：** 在 [GitHub Issues](https://github.com/jeahrnk/WeChat-Multi-Manager/issues) 附上日志文件路径与操作步骤。
+
+---
+
 ## 常见问题
 
 <details open>
 <summary><strong>打开提示「已损坏，无法打开」</strong></summary>
 
-选菜单 `4) 修复某一个多开微信签名`。若仍不行，再用 `2) 升级` 完整重建。
+选菜单 `8) 修复某一个多开微信签名`。若仍不行，再用 `6) 升级` 完整重建。
 </details>
 
 <details>
 <summary><strong>微信官方升级后，多开打不开了</strong></summary>
 
-先在 App Store / 微信内更新原版，再运行脚本选 `3) 升级全部多开微信`。
+先在 App Store / 微信内更新原版，再运行脚本选 `7) 升级全部多开微信`。
 </details>
 
 <details>
@@ -259,7 +378,7 @@ chmod +x wechat-multi.sh
 <details>
 <summary><strong>升级中途失败，旧副本没了</strong></summary>
 
-脚本会自动尝试回滚。若失败，旧副本可能以 `.app.backup` 保留在 `/Applications/`，选菜单 `9) 恢复升级失败留下的备份`。
+脚本会自动尝试回滚。若失败，旧副本可能以 `.app.backup` 保留在 `/Applications/`，选菜单 `14) 恢复升级失败留下的备份`。
 </details>
 
 <details>
@@ -280,6 +399,50 @@ chmod +x wechat-multi.sh
 新建、升级、修复签名通常不影响聊天记录。删除副本只移走 App 文件；若需保留数据，请勿清空对应微信账号数据目录。
 </details>
 
+<details>
+<summary><strong>换电脑怎么迁移某一个多开微信</strong></summary>
+
+**旧电脑：** 选 `11) 导出某一个多开微信到桌面文件夹`，导出前请先退出该副本。桌面会出现 `WeChat-Backup-<名称>-<时间>` 文件夹，内含 App、聊天数据和 `manifest.json`。
+
+**新电脑：** 安装原版微信和本脚本，将备份文件夹拷到桌面（或任意路径），选 `12) 从文件夹导入多开微信`，按提示选择文件夹并确认即可。
+</details>
+
+<details>
+<summary><strong>导出/导入时提示磁盘空间不足</strong></summary>
+
+脚本会在操作前预检空间。导出检查**桌面**可用空间；导入检查系统盘与用户目录。若仍要继续可选 `y` 强行执行，但大体积备份（几十 GB）建议预留至少 **110%** 预计体积。
+</details>
+
+<details>
+<summary><strong>启动自检是什么？会关掉微信吗？</strong></summary>
+
+新建、升级或导入成功后，脚本会询问「是否进行启动自检？」（默认回车即 Yes）。会后台打开该副本最多 15 秒检测进程，**不会自动退出**，也**不会关闭其他微信**。不需要可输入 `n` 跳过。
+</details>
+
+<details>
+<summary><strong>日志在哪里？</strong></summary>
+
+`~/Library/Logs/WeChatMultiManager/`，文件名含日期时间。菜单 `3) 查看详细信息` 也会显示日志目录路径。
+</details>
+
+---
+
+## Release Notes
+
+### v1.6.1（当前）
+
+- 修复：`import_multi_app` 在 sudo 失败时仍写入托管记录
+- 导出前增加桌面磁盘空间预检
+- 启动自检改为可选，并说明检测后副本保持运行
+
+### v1.6.0
+
+- 完整导出/导入（App + Containers + Group Containers + manifest）
+- 导入事务化回滚、Group Container 智能发现、菜单分组重排
+- 磁盘预检（导入）、启动自检、扫描缓存
+
+完整历史：[CHANGELOG.md](CHANGELOG.md)
+
 ---
 
 ## 系统要求
@@ -295,7 +458,7 @@ chmod +x wechat-multi.sh
 
 ## 版本与更新
 
-- 当前版本：**v1.5.5**
+- 当前版本：**v1.6.1**
 - 完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
 ---
