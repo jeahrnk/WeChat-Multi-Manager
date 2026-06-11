@@ -6,7 +6,19 @@
 </p>
 
 <p align="center">
-  支持 macOS 13+ · Apple Silicon / Intel · 当前版本 v1.6.1
+  支持 macOS 13+ · Apple Silicon / Intel · 当前版本 <a href="https://github.com/jeahrnk/WeChat-Multi-Manager/releases/tag/v1.6.1">v1.6.1</a>
+</p>
+
+<p align="center">
+  <strong>一键安装</strong>
+</p>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/install.sh | zsh
+```
+
+<p align="center">
+  安装到 <code>~/Applications/WeChat-Multi-Manager/</code> · 含终端版与双击版
 </p>
 
 ---
@@ -169,7 +181,13 @@ chmod +x wechat-multi.sh
 
 ### 界面预览
 
-启动后大致如下（具体列表因机器而异）：
+<!-- 有截图后取消注释下一行 -->
+<!-- ![WeChat Multi Manager 菜单界面](docs/screenshots/menu.png) -->
+
+将运行脚本后的终端窗口截图保存为 `docs/screenshots/menu.png`，即可在 README 展示（欢迎 PR）。
+
+<details>
+<summary>文字版界面示意</summary>
 
 ```text
 ======================================
@@ -177,25 +195,18 @@ chmod +x wechat-multi.sh
 ======================================
 
 发现以下多开微信：
-
-✅ 1) WeChat-Multi-work
-      路径：/Applications/WeChat-Multi-work.app
-      Bundle ID：com.tencent.xinWeChat.multi.work
-      状态：版本一致
+✅ 1) WeChat-Multi-work  …
 
 ────────────────────────────────────
 请选择操作：
-
-  查看
-  1)  只查看列表，不操作
-  ...
+  查看 → 1) 只查看  2) 检查更新  …
+  创建与升级 → 4) 新建  5) 导入  …
   0)  退出
 ────────────────────────────────────
-
 输入数字：
 ```
 
-> 欢迎补充截图 PR：将菜单界面截图放入 `docs/screenshots/`，README 会自动展示。
+</details>
 
 ---
 
@@ -427,24 +438,6 @@ chmod +x wechat-multi.sh
 
 ---
 
-## Release Notes
-
-### v1.6.1（当前）
-
-- 修复：`import_multi_app` 在 sudo 失败时仍写入托管记录
-- 导出前增加桌面磁盘空间预检
-- 启动自检改为可选，并说明检测后副本保持运行
-
-### v1.6.0
-
-- 完整导出/导入（App + Containers + Group Containers + manifest）
-- 导入事务化回滚、Group Container 智能发现、菜单分组重排
-- 磁盘预检（导入）、启动自检、扫描缓存
-
-完整历史：[CHANGELOG.md](CHANGELOG.md)
-
----
-
 ## 系统要求
 
 | 项目 | 要求 |
@@ -458,8 +451,9 @@ chmod +x wechat-multi.sh
 
 ## 版本与更新
 
-- 当前版本：**v1.6.1**
-- 完整更新记录：[CHANGELOG.md](CHANGELOG.md)
+**当前版本：v1.6.1** — 导出磁盘预检、启动自检可选、导入 sudo 修复。[Release 说明](https://github.com/jeahrnk/WeChat-Multi-Manager/releases/tag/v1.6.1)
+
+完整历史：[CHANGELOG.md](CHANGELOG.md)（单一来源，避免与 README 重复维护）
 
 ---
 
