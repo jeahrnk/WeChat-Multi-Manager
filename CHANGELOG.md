@@ -1,5 +1,50 @@
 # Changelog
 
+## v1.5.5
+
+### 修复
+- **消除 `name=` / `bid=` 刷屏输出**：根因是 zsh 在 `for` 循环内重复 `local` 会打印变量赋值；将所有循环内 `local` 提前到循环外，并用 `${app:t}` 取 basename
+
+---
+
+## v1.5.4
+
+### 修复
+- **`status` 只读变量冲突**：`print_multi_apps` 中 `status` 重命名为 `ver_status`，修复导入成功后脚本报错退出的问题
+
+### 改进
+- 脚本开头加 `emulate -L zsh` 隔离 shell 配置（`name=` / `bid=` 刷屏的彻底修复见 v1.5.5）
+
+---
+
+## v1.5.3
+
+### 改进
+- **菜单错误处理统一**：输入无效、用户取消、sudo 失败、操作失败等均返回菜单，不再 `die` 退出整个脚本
+- **菜单缩进整理**：选项 2/3/4/5 等分支结构对齐，便于维护
+- 新增 `_run_with_sudo_and_wechat_closed` 辅助函数，复用 sudo + 关微信流程
+- `pick_app_by_num` / `pick_importable_by_num` 改为 `warn + return 1`
+- `create_or_replace_multi` / `fix_signature` / `delete_multi_app` 操作失败改为 `warn + return 1`，保留回滚逻辑
+
+### 说明
+- `verify_signature()` 当前仅有一处定义（v1.5.2 重构时已合并）
+- `die` 仅保留在启动阶段环境检测，属于不可恢复错误
+
+---
+
+## v1.5.2
+
+### 新增
+- **循环菜单**：执行完操作后返回菜单，选择 `0` 退出，不再单次执行就结束
+- **菜单选项 10**：导入已有多开微信（如 `WeChat-Work.app`），写入托管记录并补 marker 文件
+
+### 改进
+- 删除启动时的 `clear`，避免终端输出出现大量空行
+- 脚本开头关闭 xtrace，避免 shell 调试模式泄漏 `name=` / `bid=` 赋值输出
+- `pause` 改为仅在 `.command` 双击运行且选择退出时触发，终端交互不再每次按回车
+
+---
+
 ## v1.5.1
 
 ### 修复

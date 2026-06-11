@@ -19,6 +19,7 @@
 | 日志系统 | 每次运行自动保存，报错直接发日志排查 |
 | Dry Run | 先演练，看清楚会改什么再实际执行 |
 | 恢复备份 | 升级中断后可通过菜单恢复旧副本 |
+| 导入已有副本 | 将 `WeChat-Work.app` 等旧式多开纳入托管管理 |
 
 ## 使用方法
 
@@ -38,16 +39,20 @@ chmod +x wechat-multi.sh
 启动后按菜单操作：
 
 ```
-1) 新建一个多开微信
-2) 升级某一个多开微信
-3) 升级全部多开微信
-4) 修复某一个多开微信签名
-5) 删除某一个多开微信
-6) 检查更新状态
-7) 查看详细信息
-8) 只查看列表，不操作
-9) 恢复升级失败留下的备份
+1)  新建一个多开微信
+2)  升级某一个多开微信
+3)  升级全部多开微信
+4)  修复某一个多开微信签名
+5)  删除某一个多开微信
+6)  检查更新状态
+7)  查看详细信息
+8)  只查看列表，不操作
+9)  恢复升级失败留下的备份
+10) 导入已有多开微信
+0)  退出
 ```
+
+脚本采用循环菜单，执行完一项后自动返回菜单；只有选择 `0` 退出时才会结束。
 
 复制、删除、签名等操作需要 **管理员权限**（sudo），脚本会在需要时提示输入密码。
 
@@ -59,21 +64,51 @@ chmod +x wechat-multi.sh
 
 不会实际修改任何文件，只展示将要执行的操作。第一次使用建议先跑一遍。
 
-### 双击运行（可选）
+### 双击运行：`WeChat-Multi-Manager.command`（推荐不熟悉终端的用户）
 
-仓库内提供了 `WeChat-Multi-Manager.command`（与 `wechat-multi.sh` 内容相同），下载后赋权即可双击运行：
+`WeChat-Multi-Manager.command` 与 `wechat-multi.sh` **内容完全相同**，只是 macOS 会把它当作「终端快捷方式」——双击即可在终端中打开交互菜单。
+
+#### 下载
 
 ```bash
 curl -O https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/WeChat-Multi-Manager.command
 chmod +x WeChat-Multi-Manager.command
 ```
 
-也可以自行创建 `.command` 文件指向脚本路径，例如：
+也可以两个文件一起下载（终端用 `.sh`，双击用 `.command`）：
 
-```zsh
-#!/bin/zsh
-~/Scripts/wechat-multi.sh
+```bash
+curl -O https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/wechat-multi.sh
+curl -O https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/WeChat-Multi-Manager.command
+chmod +x wechat-multi.sh WeChat-Multi-Manager.command
 ```
+
+#### 使用步骤
+
+1. 将 `WeChat-Multi-Manager.command` 放到任意目录（桌面、`~/Scripts` 等均可）
+2. 首次运行前确认已赋权：`chmod +x WeChat-Multi-Manager.command`
+3. **双击文件**，终端会自动打开并显示菜单
+4. 按菜单提示输入数字操作；选 `0` 退出
+5. 退出时会提示「按回车键退出」，防止终端窗口立刻关闭（仅 `.command` 双击运行有此提示）
+
+#### 与 `wechat-multi.sh` 的区别
+
+| | `wechat-multi.sh` | `WeChat-Multi-Manager.command` |
+|--|-------------------|-------------------------------|
+| 启动方式 | 终端执行 `./wechat-multi.sh` | 访达双击 |
+| 退出行为 | 选 `0` 后直接结束 | 选 `0` 后提示按回车再关闭窗口 |
+| 适用场景 | 习惯命令行的用户 | 希望像 App 一样点开就用 |
+
+#### 首次双击提示「无法打开」？
+
+在终端中对文件所在目录执行：
+
+```bash
+xattr -cr WeChat-Multi-Manager.command
+chmod +x WeChat-Multi-Manager.command
+```
+
+然后重新双击即可。
 
 ## 工作原理
 
@@ -132,7 +167,8 @@ chmod +x WeChat-Multi-Manager.command
 
 - 升级前会自动关闭正在运行的微信进程
 - 本工具仅管理微信副本，不修改原版微信
-- 版本更新记录见 [CHANGELOG.md](CHANGELOG.md)
+- 当前版本：**v1.5.5**
+- 版本更新记录见 [CHANGELOG.md](CHANGELOG.md)（含 v1.5.2 ~ v1.5.5 循环菜单、导入旧副本、输出修复等）
 
 ## License
 

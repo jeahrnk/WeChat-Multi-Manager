@@ -1,16 +1,18 @@
 #!/bin/zsh
 # =============================================================================
-#  WeChat Multi Manager  v1.5.1
+#  WeChat Multi Manager  v1.5.5
 #  支持 macOS 13+，Apple Silicon / Intel 均可
 #
 #  功能：新建 / 升级 / 修复签名 / 删除 多开微信副本
 #  用法：chmod +x wechat-multi.sh && ./wechat-multi.sh [--dry-run]
 #
-#  GitHub / 小红书分享版
 # =============================================================================
 
+emulate -L zsh
 set -u
 setopt NULL_GLOB
+unsetopt xtrace verbose 2>/dev/null
+set +x 2>/dev/null
 
 # ──────────────────────────────────────────────
 # 参数解析
@@ -27,7 +29,7 @@ readonly MULTI_NAME_PREFIX="WeChat-Multi"
 readonly MULTI_BUNDLE_PREFIX="com.tencent.xinWeChat.multi"
 readonly PLISTBUDDY="/usr/libexec/PlistBuddy"
 readonly MARKER_FILENAME=".wechat_multi_managed"
-readonly VERSION="1.5.1"
+readonly VERSION="1.5.5"
 
 readonly CONFIG_DIR="$HOME/.config/wechat-multi"
 readonly MANAGED_JSON="$CONFIG_DIR/managed_apps.json"
@@ -40,7 +42,10 @@ readonly LOG_FILE="$LOG_DIR/$(date +%Y-%m-%d_%H%M%S).log"
 # 全局状态
 # ──────────────────────────────────────────────
 MULTI_APPS=()
+IMPORTABLE_APPS=()
 PICKED_APP=""
+_IS_COMMAND=0
+[[ "${(%):-%x}" == *.command ]] && _IS_COMMAND=1
 SUDO_KEEPALIVE_PID=""
 SOURCE_APP=""
 SOURCE_VERSION=""
@@ -56,7 +61,6 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 # ──────────────────────────────────────────────
 # UI 工具
 # ──────────────────────────────────────────────
-clear
 echo "======================================"
 echo "  WeChat Multi Manager  v${VERSION}"
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -70,7 +74,8 @@ echo "# dry-run：$DRY_RUN"
 echo "# 日志路径：$LOG_FILE"
 echo ""
 
-pause() {
+pause_on_exit() {
+  [ "$_IS_COMMAND" -eq 1 ] || return 0
   echo ""
   read "dummy?按回车键退出..."
 }
@@ -328,7 +333,10 @@ need_sudo() {
   [ "$DRY_RUN" -eq 1 ] && { _sudo_acquired=1; return; }
 
   echo "需要管理员权限，用于复制、删除、签名 /Applications 里的微信副本。"
-  sudo -v || die "sudo 鉴权失败。"
+  if ! sudo -v; then
+    warn "sudo 鉴权失败。"
+    return 1
+  fi
 
   ( while true; do sudo -n true 2>/dev/null; sleep 60; done ) &
   SUDO_KEEPALIVE_PID=$!
@@ -367,7 +375,10 @@ wait_wechat_exit() {
   pgrep -af "[Ww]e[Cc]hat" 2>/dev/null || true
   echo ""
   read "force_close?是否强制继续？[y/N]："
-  [[ "$force_close" =~ ^[Yy]$ ]] || die "已取消。"
+  if ! [[ "$force_close" =~ ^[Yy]$ ]]; then
+    info "已取消。"
+    return 1
+  fi
 }
 
 # ──────────────────────────────────────────────
@@ -375,18 +386,18 @@ wait_wechat_exit() {
 # ──────────────────────────────────────────────
 scan_multi_apps() {
   MULTI_APPS=()
+  local app app_name app_bid by_name by_bid by_json by_marker
 
   for app in /Applications/*.app; do
     [ -d "$app" ] || continue
     [[ "$app" == "$SOURCE_APP" ]] && continue
 
-    local name bid
-    name="$(basename "$app")"
-    bid="$(get_bundle_id "$app")"
+    app_name=${app:t}
+    app_bid="$(get_bundle_id "$app")"
 
-    local by_name=0 by_bid=0 by_json=0 by_marker=0
-    [[ "$name" == ${MULTI_NAME_PREFIX}* ]]                              && by_name=1
-    [[ "$bid"  == ${MULTI_BUNDLE_PREFIX}* ]]                            && by_bid=1
+    by_name=0; by_bid=0; by_json=0; by_marker=0
+    [[ "$app_name" == ${MULTI_NAME_PREFIX}* ]]                        && by_name=1
+    [[ "$app_bid"  == ${MULTI_BUNDLE_PREFIX}* ]]                        && by_bid=1
     json_is_managed "$app" 2>/dev/null                                  && by_json=1
     [ -f "$app/Contents/Resources/${MARKER_FILENAME}" ]                 && by_marker=1
 
@@ -408,25 +419,24 @@ print_multi_apps() {
   echo "发现以下多开微信："
   echo ""
 
-  local i=1
+  local i=1 app_name version app_bid icon ver_status managed_mark
   for app in "${MULTI_APPS[@]}"; do
-    local name version bid icon status managed_mark
-    name="$(basename "$app")"
+    app_name=${app:t}
     version="$(get_version "$app")"
-    bid="$(get_bundle_id "$app")"
+    app_bid="$(get_bundle_id "$app")"
     managed_mark=""
     json_is_managed "$app" 2>/dev/null && managed_mark=" [托管]"
 
     if [ "$version" = "$SOURCE_VERSION" ]; then
-      icon="✅"; status="版本一致"
+      icon="✅"; ver_status="版本一致"
     else
-      icon="⚠️ "; status="需要升级  (当前 $version → 原版 $SOURCE_VERSION)"
+      icon="⚠️ "; ver_status="需要升级  (当前 $version → 原版 $SOURCE_VERSION)"
     fi
 
-    echo "$icon $i) $name$managed_mark"
+    echo "$icon $i) $app_name$managed_mark"
     echo "      路径：$app"
-    echo "      Bundle ID：$bid"
-    echo "      状态：$status"
+    echo "      Bundle ID：$app_bid"
+    echo "      状态：$ver_status"
     echo ""
     i=$((i+1))
   done
@@ -439,12 +449,166 @@ pick_app_by_num() {
   local prompt="$1"
   read "num?$prompt"
 
-  [[ "$num" =~ ^[0-9]+$ ]] || die "请输入有效数字。"
+  if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+    warn "请输入有效数字。"
+    return 1
+  fi
 
   PICKED_APP="${MULTI_APPS[$num]:-}"
   if [ -z "$PICKED_APP" ] || [ ! -d "$PICKED_APP" ]; then
-    die "序号无效或路径不存在。"
+    warn "序号无效或路径不存在。"
+    return 1
   fi
+  return 0
+}
+
+pick_importable_by_num() {
+  local prompt="$1"
+  read "num?$prompt"
+
+  if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+    warn "请输入有效数字。"
+    return 1
+  fi
+
+  PICKED_APP="${IMPORTABLE_APPS[$num]:-}"
+  if [ -z "$PICKED_APP" ] || [ ! -d "$PICKED_APP" ]; then
+    warn "序号无效或路径不存在。"
+    return 1
+  fi
+  return 0
+}
+
+is_already_managed() {
+  local app="$1" app_name app_bid
+  app_name=${app:t}
+  app_bid="$(get_bundle_id "$app")"
+  [[ "$app_name" == ${MULTI_NAME_PREFIX}* ]] && return 0
+  [[ "$app_bid" == ${MULTI_BUNDLE_PREFIX}* ]] && return 0
+  json_is_managed "$app" 2>/dev/null && return 0
+  [ -f "$app/Contents/Resources/${MARKER_FILENAME}" ] && return 0
+  return 1
+}
+
+is_importable_wechat_clone() {
+  local app="$1" app_name app_bid
+  app_name=${app:t}
+  app_bid="$(get_bundle_id "$app")"
+  [[ "$app_bid" == "$SOURCE_BUNDLE_ID" ]] && return 1
+  [[ "$app_bid" == com.tencent.xinWeChat* ]] && return 0
+  [[ "$app_name" == WeChat* && "$app_name" != "WeChat.app" ]] && return 0
+  [[ "$app_name" == *微信* && "$app_name" != "微信.app" ]] && return 0
+  return 1
+}
+
+scan_importable_apps() {
+  IMPORTABLE_APPS=()
+
+  for app in /Applications/*.app; do
+    [ -d "$app" ] || continue
+    [[ "$app" == "$SOURCE_APP" ]] && continue
+    is_already_managed "$app" && continue
+    is_importable_wechat_clone "$app" && IMPORTABLE_APPS+=("$app")
+  done
+}
+
+print_importable_apps() {
+  scan_importable_apps
+
+  if [ ${#IMPORTABLE_APPS[@]} -eq 0 ]; then
+    info "未发现可导入的多开微信。"
+    return 1
+  fi
+
+  echo "发现以下可导入的多开微信："
+  echo ""
+  echo "（手动创建的旧副本，如 WeChat-Work.app，导入后将纳入托管管理）"
+  echo ""
+
+  local i=1 app_name version app_bid
+  for app in "${IMPORTABLE_APPS[@]}"; do
+    app_name=${app:t}
+    version="$(get_version "$app")"
+    app_bid="$(get_bundle_id "$app")"
+    echo "  $i) $app_name"
+    info "   路径：$app"
+    info "   Bundle ID：$app_bid"
+    info "   版本：$version"
+    echo ""
+    i=$((i+1))
+  done
+  return 0
+}
+
+write_managed_marker() {
+  local target_app="$1"
+  if [ "$DRY_RUN" -eq 0 ]; then
+    sudo mkdir -p "$target_app/Contents/Resources" && \
+    sudo sh -c "echo 'WeChat Multi Manager v${VERSION}' > \
+      '$target_app/Contents/Resources/${MARKER_FILENAME}'" || \
+      warn "写入托管标记失败（不影响使用）。"
+  else
+    info "[dry-run] 写入 $target_app/Contents/Resources/${MARKER_FILENAME}"
+  fi
+}
+
+import_multi_app() {
+  local target_app="$1"
+  local bundle_id app_name
+  app_name="$(basename "$target_app")"
+  bundle_id="$(get_bundle_id "$target_app")"
+
+  if [[ "$bundle_id" == "unknown" ]]; then
+    warn "无法读取 Bundle ID，导入中止。"
+    return 1
+  fi
+  if [[ "$bundle_id" == "$SOURCE_BUNDLE_ID" ]]; then
+    warn "不能导入原版微信。"
+    return 1
+  fi
+
+  echo ""
+  echo "--------------------------------------"
+  step "导入：$target_app"
+  info "Bundle ID：$bundle_id"
+  [ "$DRY_RUN" -eq 1 ] && step "[dry-run 模式，以下操作均不会实际执行]"
+  echo "--------------------------------------"
+
+  need_sudo
+  write_managed_marker "$target_app"
+
+  if [ "$DRY_RUN" -eq 0 ]; then
+    json_register "$target_app" "$bundle_id" 2>/dev/null || \
+      warn "写入托管记录失败（不影响使用）。"
+  else
+    info "[dry-run] json_register $target_app $bundle_id"
+  fi
+
+  success "已导入：$app_name"
+}
+
+_run_with_sudo_and_wechat_closed() {
+  need_sudo || return 1
+  wait_wechat_exit || return 1
+  "$@"
+}
+
+show_menu() {
+  echo "────────────────────────────────────"
+  echo "请选择操作："
+  echo "  1)  新建一个多开微信"
+  echo "  2)  升级某一个多开微信"
+  echo "  3)  升级全部多开微信"
+  echo "  4)  修复某一个多开微信签名"
+  echo "  5)  删除某一个多开微信"
+  echo "  6)  检查更新状态"
+  echo "  7)  查看详细信息"
+  echo "  8)  只查看列表，不操作"
+  echo "  9)  恢复升级失败留下的备份"
+  echo "  10) 导入已有多开微信"
+  echo "  0)  退出"
+  echo "────────────────────────────────────"
+  echo ""
 }
 
 # ──────────────────────────────────────────────
@@ -526,18 +690,32 @@ create_or_replace_multi() {
         echo ""
         read "backup_choice?请选择 [1/2/3]："
         case "$backup_choice" in
-          1) sudo rm -rf "$backup_path" || die "删除残留备份失败。" ;;
+          1)
+            if ! sudo rm -rf "$backup_path"; then
+              warn "删除残留备份失败。"
+              return 1
+            fi
+            ;;
           2)
             warn "正在恢复备份..."
             [ -d "$target_app" ] && sudo rm -rf "$target_app"
-            sudo mv "$backup_path" "$target_app" || die "恢复备份失败。"
-            success "已恢复：$app_name"
+            if sudo mv "$backup_path" "$target_app"; then
+              success "已恢复：$app_name"
+            else
+              warn "恢复备份失败。"
+            fi
             return 0
             ;;
-          *) die "已取消。" ;;
+          *)
+            info "已取消。"
+            return 1
+            ;;
         esac
       fi
-      sudo mv "$target_app" "$backup_path" || die "备份旧副本失败，已中止。"
+      if ! sudo mv "$target_app" "$backup_path"; then
+        warn "备份旧副本失败，已中止。"
+        return 1
+      fi
     else
       info "[dry-run] mv $target_app → $backup_path"
     fi
@@ -545,60 +723,58 @@ create_or_replace_multi() {
 
   step "复制原版微信（可能需要十几秒）..."
   if [ "$DRY_RUN" -eq 0 ]; then
-    sudo cp -R "$SOURCE_APP" "$target_app" || {
+    if ! sudo cp -R "$SOURCE_APP" "$target_app"; then
       rollback_upgrade "$target_app" "$backup_path"
-      die "复制微信失败，已回滚。"
-    }
+      warn "复制微信失败，已回滚。"
+      return 1
+    fi
   else
     info "[dry-run] cp -R $SOURCE_APP $target_app"
   fi
 
   step "修改 Bundle ID..."
   if [ "$DRY_RUN" -eq 0 ]; then
-    sudo "$PLISTBUDDY" \
+    if ! sudo "$PLISTBUDDY" \
       -c "Set :CFBundleIdentifier $bundle_id" \
-      "$target_app/Contents/Info.plist" || {
-        rollback_upgrade "$target_app" "$backup_path"
-        die "Bundle ID 修改失败，已回滚。"
-      }
+      "$target_app/Contents/Info.plist"; then
+      rollback_upgrade "$target_app" "$backup_path"
+      warn "Bundle ID 修改失败，已回滚。"
+      return 1
+    fi
 
     # 写后校验
     local after_bid
     after_bid="$(get_bundle_id "$target_app")"
     if [ "$after_bid" != "$bundle_id" ]; then
       rollback_upgrade "$target_app" "$backup_path"
-      die "Bundle ID 校验失败（期望 $bundle_id，实际 $after_bid），已回滚。"
+      warn "Bundle ID 校验失败（期望 $bundle_id，实际 $after_bid），已回滚。"
+      return 1
     fi
   else
     info "[dry-run] PlistBuddy Set :CFBundleIdentifier $bundle_id"
   fi
 
   step "写入托管标记..."
-  if [ "$DRY_RUN" -eq 0 ]; then
-    sudo mkdir -p "$target_app/Contents/Resources" && \
-    sudo sh -c "echo 'WeChat Multi Manager v${VERSION}' > \
-      '$target_app/Contents/Resources/${MARKER_FILENAME}'" || \
-      warn "写入托管标记失败（不影响使用）。"
-  else
-    info "[dry-run] 写入 $target_app/Contents/Resources/${MARKER_FILENAME}"
-  fi
+  write_managed_marker "$target_app"
 
   step "清除扩展属性..."
   if [ "$DRY_RUN" -eq 0 ]; then
-    sudo xattr -cr "$target_app" || {
+    if ! sudo xattr -cr "$target_app"; then
       rollback_upgrade "$target_app" "$backup_path"
-      die "清除扩展属性失败，已回滚。"
-    }
+      warn "清除扩展属性失败，已回滚。"
+      return 1
+    fi
   else
     run_cmd sudo xattr -cr "$target_app"
   fi
 
   step "重新签名..."
   if [ "$DRY_RUN" -eq 0 ]; then
-    sudo codesign --force --deep --sign - "$target_app" || {
+    if ! sudo codesign --force --deep --sign - "$target_app"; then
       rollback_upgrade "$target_app" "$backup_path"
-      die "签名失败，已回滚。"
-    }
+      warn "签名失败，已回滚。"
+      return 1
+    fi
     verify_signature "$target_app"
   else
     run_cmd sudo codesign --force --deep --sign - "$target_app"
@@ -636,11 +812,17 @@ fix_signature() {
   echo "--------------------------------------"
 
   step "清除扩展属性..."
-  run_cmd sudo xattr -cr "$target_app" || die "清除扩展属性失败。"
+  if ! run_cmd sudo xattr -cr "$target_app"; then
+    warn "清除扩展属性失败。"
+    return 1
+  fi
 
   step "重新签名..."
   if [ "$DRY_RUN" -eq 0 ]; then
-    sudo codesign --force --deep --sign - "$target_app" || die "签名失败。"
+    if ! sudo codesign --force --deep --sign - "$target_app"; then
+      warn "签名失败。"
+      return 1
+    fi
     verify_signature "$target_app"
   else
     run_cmd sudo codesign --force --deep --sign - "$target_app"
@@ -664,14 +846,14 @@ delete_multi_app() {
   if ! json_is_managed "$target_app" 2>/dev/null; then
     warn "此 App 不在托管记录中，可能不是本脚本创建的副本！"
     read "confirm_unmanaged?仍然继续删除？[y/N]："
-    [[ "$confirm_unmanaged" =~ ^[Yy]$ ]] || die "已取消。"
+    [[ "$confirm_unmanaged" =~ ^[Yy]$ ]] || { info "已取消。"; return 1; }
   fi
 
   read "confirm_delete?确认删除 $app_name？将移入废纸篓（可恢复）。[y/N]："
-  [[ "$confirm_delete" =~ ^[Yy]$ ]] || die "已取消。"
+  [[ "$confirm_delete" =~ ^[Yy]$ ]] || { info "已取消。"; return 1; }
 
-  need_sudo
-  wait_wechat_exit
+  need_sudo || return 1
+  wait_wechat_exit || return 1
 
   if [ "$DRY_RUN" -eq 0 ]; then
     # 废纸篓里已有同名文件则加时间戳
@@ -685,9 +867,12 @@ delete_multi_app() {
       : # 成功
     else
       warn "sudo mv 失败，尝试通过 Finder 移入废纸篓..."
-      osascript -e \
+      if ! osascript -e \
         "tell application \"Finder\" to delete POSIX file \"$target_app\"" \
-        >/dev/null 2>&1 || die "移入废纸篓失败，请手动删除：$target_app"
+        >/dev/null 2>&1; then
+        warn "移入废纸篓失败，请手动删除：$target_app"
+        return 1
+      fi
     fi
 
     json_unregister "$target_app" 2>/dev/null || true
@@ -717,18 +902,17 @@ check_updates() {
     return
   fi
 
-  local needs_upgrade=0
+  local needs_upgrade=0 app_name version app_bid
   for app in "${MULTI_APPS[@]}"; do
-    local name version bid
-    name="$(basename "$app")"
+    app_name=${app:t}
     version="$(get_version "$app")"
-    bid="$(get_bundle_id "$app")"
+    app_bid="$(get_bundle_id "$app")"
 
     if [ "$version" = "$SOURCE_VERSION" ]; then
-      echo "✅ $name"
+      echo "✅ $app_name"
       info "版本 $version — 已是最新"
     else
-      echo "⚠️  $name"
+      echo "⚠️  $app_name"
       info "版本 $version → 需要升级到 $SOURCE_VERSION"
       needs_upgrade=$((needs_upgrade+1))
     fi
@@ -767,12 +951,11 @@ show_detail() {
   else
     echo "多开副本"
     echo ""
-    local i=1
+    local i=1 app_name version app_bid sig managed_mark created_at
     for app in "${MULTI_APPS[@]}"; do
-      local name version bid sig managed_mark created_at
-      name="$(basename "$app")"
+      app_name=${app:t}
       version="$(get_version "$app")"
-      bid="$(get_bundle_id "$app")"
+      app_bid="$(get_bundle_id "$app")"
       sig="$(codesign --verify --strict "$app" >/dev/null 2>&1 && echo "正常" || echo "异常⚠️")"
       managed_mark="否"
       created_at="-"
@@ -782,9 +965,9 @@ show_detail() {
         created_at="$(json_created_at "$app" 2>/dev/null || echo "-")"
       fi
 
-      info "$i) $name"
+      info "$i) $app_name"
       info "   路径：       $app"
-      info "   Bundle ID：  $bid"
+      info "   Bundle ID：  $app_bid"
       info "   版本：       $version"
       info "   签名：       $sig"
       info "   托管记录：   $managed_mark"
@@ -814,10 +997,10 @@ _upgrade_all() {
   local fail_list=()
   local skip_list=()
 
+  local BID app_name cur_ver
   for app in "${MULTI_APPS[@]}"; do
-    local BID app_name cur_ver
     BID="$(get_bundle_id "$app")"
-    app_name="$(basename "$app")"
+    app_name=${app:t}
 
     if [[ "$BID" == "unknown" ]] || [[ "$BID" == "$SOURCE_BUNDLE_ID" ]]; then
       warn "跳过 $app_name：Bundle ID 异常（$BID）"
@@ -859,12 +1042,12 @@ check_bundle_id_conflict() {
   local bundle_id="$1"
   local conflicts=()
 
+  local app app_bid
   for app in /Applications/*.app; do
     [ -d "$app" ] || continue
     [[ "$app" == "$SOURCE_APP" ]] && continue
-    local bid
-    bid="$(get_bundle_id "$app")"
-    if [ "$bid" = "$bundle_id" ]; then
+    app_bid="$(get_bundle_id "$app")"
+    if [ "$app_bid" = "$bundle_id" ]; then
       conflicts+=("$app")
     fi
   done
@@ -879,9 +1062,10 @@ check_bundle_id_conflict() {
       info "[dry-run] 如果真实执行，将在此处要求确认是否继续。"
     else
       read "confirm_conflict?Bundle ID 冲突可能导致两个副本互相干扰，确认继续？[y/N]："
-      [[ "$confirm_conflict" =~ ^[Yy]$ ]] || die "已取消，请换一个编号。"
+      [[ "$confirm_conflict" =~ ^[Yy]$ ]] || return 1
     fi
   fi
+  return 0
 }
 
 # ══════════════════════════════════════════════
@@ -892,119 +1076,118 @@ check_env
 echo ""
 json_cleanup_orphans
 
-# 启动时检测残留 backup，提示但不打断
-STALE_COUNT=0
-for bak in /Applications/*.app.backup; do
-  [ -d "$bak" ] && STALE_COUNT=$((STALE_COUNT+1))
-done
-[ "$STALE_COUNT" -gt 0 ] && \
-  warn "发现 $STALE_COUNT 个残留升级备份，可通过菜单选项 9 处理。"
-echo ""
+while true; do
+  # 每轮刷新：残留 backup 提示 + 多开列表
+  STALE_COUNT=0
+  for bak in /Applications/*.app.backup; do
+    [ -d "$bak" ] && STALE_COUNT=$((STALE_COUNT+1))
+  done
+  [ "$STALE_COUNT" -gt 0 ] && \
+    warn "发现 $STALE_COUNT 个残留升级备份，可通过菜单选项 9 处理。"
+  echo ""
 
-print_multi_apps
+  print_multi_apps
+  show_menu
 
-echo "────────────────────────────────────"
-echo "请选择操作："
-echo "  1) 新建一个多开微信"
-echo "  2) 升级某一个多开微信"
-echo "  3) 升级全部多开微信"
-echo "  4) 修复某一个多开微信签名"
-echo "  5) 删除某一个多开微信"
-echo "  6) 检查更新状态"
-echo "  7) 查看详细信息"
-echo "  8) 只查看列表，不操作"
-echo "  9) 恢复升级失败留下的备份"
-echo "────────────────────────────────────"
-echo ""
+  read "choice?输入数字："
 
-read "choice?输入数字："
+  case "$choice" in
 
-case "$choice" in
+  # ── 0 退出 ──────────────────────────────────
+  0)
+    break
+    ;;
 
   # ── 1 新建 ──────────────────────────────────
   1)
     read "suffix?请输入多开编号/名称（如 01 / work / personal）："
 
-    [ -z "$suffix" ] && die "编号不能为空。"
-    [[ "$suffix" =~ ^[A-Za-z0-9_-]+$ ]] || \
-      die "编号只能包含英文、数字、下划线或短横线。"
+    if [ -z "$suffix" ]; then
+      warn "编号不能为空。"
+    elif ! [[ "$suffix" =~ ^[A-Za-z0-9_-]+$ ]]; then
+      warn "编号只能包含英文、数字、下划线或短横线。"
+    elif ! check_bundle_id_conflict "${MULTI_BUNDLE_PREFIX}.${suffix}"; then
+      info "已取消。"
+    else
+      TARGET_APP="/Applications/${MULTI_NAME_PREFIX}-${suffix}.app"
+      BUNDLE_ID="${MULTI_BUNDLE_PREFIX}.${suffix}"
 
-    TARGET_APP="/Applications/${MULTI_NAME_PREFIX}-${suffix}.app"
-    BUNDLE_ID="${MULTI_BUNDLE_PREFIX}.${suffix}"
-
-    # Bundle ID 冲突检测
-    check_bundle_id_conflict "$BUNDLE_ID"
-
-    if [ -d "$TARGET_APP" ]; then
-      warn "$TARGET_APP 已存在。"
-      read "confirm?继续会删除并重建，确认继续？[y/N]："
-      [[ "$confirm" =~ ^[Yy]$ ]] || die "已取消。"
+      if [ -d "$TARGET_APP" ]; then
+        warn "$TARGET_APP 已存在。"
+        read "confirm?继续会删除并重建，确认继续？[y/N]："
+        if ! [[ "$confirm" =~ ^[Yy]$ ]]; then
+          info "已取消。"
+        else
+          _run_with_sudo_and_wechat_closed create_or_replace_multi "$TARGET_APP" "$BUNDLE_ID"
+        fi
+      else
+        _run_with_sudo_and_wechat_closed create_or_replace_multi "$TARGET_APP" "$BUNDLE_ID"
+      fi
     fi
-
-    need_sudo
-    wait_wechat_exit
-    create_or_replace_multi "$TARGET_APP" "$BUNDLE_ID"
     ;;
 
   # ── 2 升级单个 ──────────────────────────────
   2)
     print_multi_apps
-    [ ${#MULTI_APPS[@]} -eq 0 ] && die "没有可升级的多开微信。"
+    if [ ${#MULTI_APPS[@]} -eq 0 ]; then
+      warn "没有可升级的多开微信。"
+    elif pick_app_by_num "请输入要升级的序号："; then
+      TARGET_APP="$PICKED_APP"
+      BUNDLE_ID="$(get_bundle_id "$TARGET_APP")"
 
-    pick_app_by_num "请输入要升级的序号："
-    TARGET_APP="$PICKED_APP"
-
-    BUNDLE_ID="$(get_bundle_id "$TARGET_APP")"
-    if [[ "$BUNDLE_ID" == "unknown" ]] || [[ "$BUNDLE_ID" == "$SOURCE_BUNDLE_ID" ]]; then
-      read "BUNDLE_ID?当前 Bundle ID 异常，请手动输入（如 ${MULTI_BUNDLE_PREFIX}.work）："
-      [ -z "$BUNDLE_ID" ] && die "Bundle ID 不能为空。"
+      if [[ "$BUNDLE_ID" == "unknown" ]] || [[ "$BUNDLE_ID" == "$SOURCE_BUNDLE_ID" ]]; then
+        read "BUNDLE_ID?当前 Bundle ID 异常，请手动输入（如 ${MULTI_BUNDLE_PREFIX}.work）："
+        if [ -z "$BUNDLE_ID" ]; then
+          warn "Bundle ID 不能为空。"
+        else
+          _run_with_sudo_and_wechat_closed create_or_replace_multi "$TARGET_APP" "$BUNDLE_ID"
+        fi
+      else
+        _run_with_sudo_and_wechat_closed create_or_replace_multi "$TARGET_APP" "$BUNDLE_ID"
+      fi
     fi
-
-    need_sudo
-    wait_wechat_exit
-    create_or_replace_multi "$TARGET_APP" "$BUNDLE_ID"
     ;;
 
   # ── 3 升级全部 ──────────────────────────────
   3)
     print_multi_apps
-    [ ${#MULTI_APPS[@]} -eq 0 ] && die "没有可升级的多开微信。"
-
-    read "confirm_all?确认升级全部 ${#MULTI_APPS[@]} 个？[y/N]："
-    [[ "$confirm_all" =~ ^[Yy]$ ]] || die "已取消。"
-
-    need_sudo
-    wait_wechat_exit
-    _upgrade_all
+    if [ ${#MULTI_APPS[@]} -eq 0 ]; then
+      warn "没有可升级的多开微信。"
+    else
+      read "confirm_all?确认升级全部 ${#MULTI_APPS[@]} 个？[y/N]："
+      if [[ "$confirm_all" =~ ^[Yy]$ ]]; then
+        _run_with_sudo_and_wechat_closed _upgrade_all
+      else
+        info "已取消。"
+      fi
+    fi
     ;;
 
   # ── 4 修复签名 ──────────────────────────────
   4)
     print_multi_apps
-    [ ${#MULTI_APPS[@]} -eq 0 ] && die "没有可修复的多开微信。"
-
-    echo ""
-    info "修复签名：只重新签名，不重建 App 文件。"
-    info "适用于：打开提示「已损坏」但文件本身完整的情况。"
-    info "如需完整重建，请使用「升级」功能。"
-    echo ""
-
-    pick_app_by_num "请输入要修复签名的序号："
-    TARGET_APP="$PICKED_APP"
-
-    need_sudo
-    fix_signature "$TARGET_APP"
+    if [ ${#MULTI_APPS[@]} -eq 0 ]; then
+      warn "没有可修复的多开微信。"
+    elif pick_app_by_num "请输入要修复签名的序号："; then
+      TARGET_APP="$PICKED_APP"
+      echo ""
+      info "修复签名：只重新签名，不重建 App 文件。"
+      info "适用于：打开提示「已损坏」但文件本身完整的情况。"
+      info "如需完整重建，请使用「升级」功能。"
+      echo ""
+      _run_with_sudo_and_wechat_closed fix_signature "$TARGET_APP"
+    fi
     ;;
 
   # ── 5 删除 ──────────────────────────────────
   5)
     print_multi_apps
-    [ ${#MULTI_APPS[@]} -eq 0 ] && die "没有可删除的多开微信。"
-
-    pick_app_by_num "请输入要删除的序号："
-    TARGET_APP="$PICKED_APP"
-
-    delete_multi_app "$TARGET_APP"
+    if [ ${#MULTI_APPS[@]} -eq 0 ]; then
+      warn "没有可删除的多开微信。"
+    elif pick_app_by_num "请输入要删除的序号："; then
+      TARGET_APP="$PICKED_APP"
+      delete_multi_app "$TARGET_APP"
+    fi
     ;;
 
   # ── 6 检查更新状态 ───────────────────────────
@@ -1051,45 +1234,77 @@ case "$choice" in
 
       read "bak_num?请输入要处理的备份序号（直接回车跳过）："
       if [ -n "$bak_num" ]; then
-        [[ "$bak_num" =~ ^[0-9]+$ ]] || die "请输入有效数字。"
-        PICKED_BAK="${STALE_BACKUPS[$bak_num]:-}"
-        [ -z "$PICKED_BAK" ] || [ ! -d "$PICKED_BAK" ] && die "序号无效。"
+        if ! [[ "$bak_num" =~ ^[0-9]+$ ]]; then
+          warn "请输入有效数字。"
+        else
+          PICKED_BAK="${STALE_BACKUPS[$bak_num]:-}"
+          if [ -z "$PICKED_BAK" ] || [ ! -d "$PICKED_BAK" ]; then
+            warn "序号无效。"
+          else
+            ORIG_APP="${PICKED_BAK%.backup}"
+            echo ""
+            echo "  1) 恢复备份（替换或还原到 $(basename "$ORIG_APP")）"
+            echo "  2) 删除备份（保留当前状态）"
+            echo "  3) 取消"
+            echo ""
+            read "bak_action?请选择 [1/2/3]："
+            if need_sudo; then
+              case "$bak_action" in
+                1)
+                  [ -d "$ORIG_APP" ] && sudo rm -rf "$ORIG_APP"
+                  if sudo mv "$PICKED_BAK" "$ORIG_APP"; then
+                    success "已恢复：$(basename "$ORIG_APP")"
+                  else
+                    warn "恢复失败。"
+                  fi
+                  ;;
+                2)
+                  if sudo rm -rf "$PICKED_BAK"; then
+                    success "已删除备份：$(basename "$PICKED_BAK")"
+                  else
+                    warn "删除备份失败。"
+                  fi
+                  ;;
+                *)
+                  info "已取消。"
+                  ;;
+              esac
+            fi
+          fi
+        fi
+      fi
+    fi
+    ;;
 
-        ORIG_APP="${PICKED_BAK%.backup}"
-        echo ""
-        echo "  1) 恢复备份（替换或还原到 $(basename "$ORIG_APP")）"
-        echo "  2) 删除备份（保留当前状态）"
-        echo "  3) 取消"
-        echo ""
-        read "bak_action?请选择 [1/2/3]："
-        need_sudo
-        case "$bak_action" in
-          1)
-            [ -d "$ORIG_APP" ] && sudo rm -rf "$ORIG_APP"
-            sudo mv "$PICKED_BAK" "$ORIG_APP" || die "恢复失败。"
-            success "已恢复：$(basename "$ORIG_APP")"
-            ;;
-          2)
-            sudo rm -rf "$PICKED_BAK" || die "删除备份失败。"
-            success "已删除备份：$(basename "$PICKED_BAK")"
-            ;;
-          *)
-            info "已取消。"
-            ;;
-        esac
+  # ── 10 导入已有多开 ─────────────────────────
+  10)
+    if print_importable_apps && pick_importable_by_num "请输入要导入的序号："; then
+      TARGET_APP="$PICKED_APP"
+      BUNDLE_ID="$(get_bundle_id "$TARGET_APP")"
+      echo ""
+      info "将导入：$(basename "$TARGET_APP")"
+      info "Bundle ID：$BUNDLE_ID"
+      read "confirm_import?确认导入？[y/N]："
+      if [[ "$confirm_import" =~ ^[Yy]$ ]]; then
+        import_multi_app "$TARGET_APP"
+      else
+        info "已取消。"
       fi
     fi
     ;;
 
   *)
-    die "无效选择。"
+    warn "无效选择，请输入 0-10。"
     ;;
-esac
+  esac
+
+  echo ""
+done
 
 echo ""
 echo "======================================"
-echo "完成。日志已保存至："
+echo "已退出。日志已保存至："
 echo "$LOG_FILE"
 echo "======================================"
 
-pause
+pause_on_exit
