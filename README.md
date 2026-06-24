@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  支持 macOS 13+ · Apple Silicon / Intel · 当前版本 <a href="https://github.com/jeahrnk/WeChat-Multi-Manager/releases/tag/v1.6.1">v1.6.1</a>
+  支持 macOS 13+ · Apple Silicon / Intel · <a href="https://github.com/jeahrnk/WeChat-Multi-Manager/releases/latest">最新版本</a>
 </p>
 
 <p align="center">
@@ -52,7 +52,7 @@ WeChat Multi Manager 通过**复制并重新签名**微信副本，让 macOS 将
 curl -fsSL https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/install.sh | zsh
 ```
 
-默认安装到 `~/Applications/WeChat-Multi-Manager/`，包含终端版与双击版（当前 v1.6.1）。
+默认安装到 `~/Applications/WeChat-Multi-Manager/`，包含终端版与双击版。
 
 自定义目录：`INSTALL_DIR=~/Desktop/WeChat-Multi-Manager curl -fsSL ... | zsh`
 
@@ -191,7 +191,7 @@ chmod +x wechat-multi.sh
 
 ```text
 ======================================
-  WeChat Multi Manager  v1.6.1
+  WeChat Multi Manager
 ======================================
 
 发现以下多开微信：
@@ -347,7 +347,7 @@ chmod +x wechat-multi.sh
 | 导入后无聊天记录 | 备份无 Containers 或未完整复制 | 确认备份文件夹含 `Library/Containers/`；重新导出 |
 | 列表里没有我的多开 | 未被识别为副本 | 选手动多开时用 `5` 导入；或检查是否在 `/Applications/` |
 | 脚本闪退 / `name=` 刷屏 | 旧版本或 shell 配置干扰 | 更新到最新版；用 `zsh wechat-multi.sh` 运行 |
-| sudo 失败后状态不一致 | 极少见（v1.6.1 已修） | 更新到 v1.6.1+；检查 `managed_apps.json` 与 App marker |
+| sudo 失败后状态不一致 | 极少见 | 更新到最新版；检查 `managed_apps.json` 与 App marker |
 | 启动自检未通过 | 首次打开较慢 / 安全提示 | 手动打开副本；或选 `n` 跳过自检 |
 
 **仍无法解决：** 在 [GitHub Issues](https://github.com/jeahrnk/WeChat-Multi-Manager/issues) 附上日志文件路径与操作步骤。
@@ -395,7 +395,7 @@ chmod +x wechat-multi.sh
 <details>
 <summary><strong>提示微信未退出，但列出的进程是 Cursor / extension-host</strong></summary>
 
-旧版脚本会把工作区名为 `WeChat-Multi-Manager` 的 Cursor 插件进程误判为微信。请更新到 **v1.6.2+**，或在升级前暂时关闭 Cursor 对该目录的工作区。真正的微信进程路径应类似 `/Applications/WeChat-Work.app/Contents/MacOS/...`。
+旧版脚本可能把 Cursor 插件进程误判为微信。请更新到最新版，或在升级前暂时关闭 Cursor 对该目录的工作区。真正的微信进程路径应类似 `/Applications/WeChat-Work.app/Contents/MacOS/...`。
 </details>
 
 <details>
@@ -457,9 +457,8 @@ chmod +x wechat-multi.sh
 
 ## 版本与更新
 
-**当前版本：v1.6.1** — 导出磁盘预检、启动自检可选、导入 sudo 修复。[Release 说明](https://github.com/jeahrnk/WeChat-Multi-Manager/releases/tag/v1.6.1)
-
-完整历史：[CHANGELOG.md](CHANGELOG.md)（单一来源，避免与 README 重复维护）
+- [Releases](https://github.com/jeahrnk/WeChat-Multi-Manager/releases) — 最新版本与发布说明
+- [CHANGELOG.md](CHANGELOG.md) — 完整更新记录
 
 ---
 
