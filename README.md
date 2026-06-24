@@ -393,6 +393,12 @@ chmod +x wechat-multi.sh
 </details>
 
 <details>
+<summary><strong>提示微信未退出，但列出的进程是 Cursor / extension-host</strong></summary>
+
+旧版脚本会把工作区名为 `WeChat-Multi-Manager` 的 Cursor 插件进程误判为微信。请更新到 **v1.6.2+**，或在升级前暂时关闭 Cursor 对该目录的工作区。真正的微信进程路径应类似 `/Applications/WeChat-Work.app/Contents/MacOS/...`。
+</details>
+
+<details>
 <summary><strong>导入后的 [托管] 副本能正常升级和删除吗</strong></summary>
 
 可以。导入后与新建副本享有相同管理能力（升级、修复、删除、检查更新）。

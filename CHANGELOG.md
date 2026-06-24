@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.6.2
+
+### 修复
+- **升级回滚未还原 `.backup`**：`rollback_upgrade` 先删除半成品再 `mv` 还原备份，避免升级失败后副本损坏、Bundle ID 变 `unknown`
+- **`.app` 体积校验过严**：升级/导出时 `.app` 阈值由 98% 放宽至 95%，减少 APFS / xattr 导致的误报失败
+- **残留进程误报**：进程检测改为必须匹配 `/Applications/…/WeChat*.app/Contents/MacOS`，并排除 Cursor `extension-host`、本工具目录；移除会误杀 Cursor 的 `osascript` 宽泛退出逻辑
+
+---
+
 ## v1.6.1
 
 ### 修复

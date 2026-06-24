@@ -1,6 +1,6 @@
 #!/bin/zsh
 # =============================================================================
-#  WeChat Multi Manager  v1.6.1
+#  WeChat Multi Manager  v1.6.2
 #  支持 macOS 13+，Apple Silicon / Intel 均可
 #
 #  功能：新建 / 升级 / 修复 / 导出导入 / 管理多开微信副本
@@ -29,7 +29,7 @@ readonly MULTI_NAME_PREFIX="WeChat-Multi"
 readonly MULTI_BUNDLE_PREFIX="com.tencent.xinWeChat.multi"
 readonly PLISTBUDDY="/usr/libexec/PlistBuddy"
 readonly MARKER_FILENAME=".wechat_multi_managed"
-readonly VERSION="1.6.1"
+readonly VERSION="1.6.2"
 
 readonly CONFIG_DIR="$HOME/.config/wechat-multi"
 readonly MANAGED_JSON="$CONFIG_DIR/managed_apps.json"
@@ -125,11 +125,13 @@ trap '_cleanup' EXIT
 # plist 工具
 # ──────────────────────────────────────────────
 get_version() {
+  [ -f "$1/Contents/Info.plist" ] || { echo "unknown"; return; }
   "$PLISTBUDDY" -c "Print :CFBundleShortVersionString" \
     "$1/Contents/Info.plist" 2>/dev/null || echo "unknown"
 }
 
 get_bundle_id() {
+  [ -f "$1/Contents/Info.plist" ] || { echo "unknown"; return; }
   "$PLISTBUDDY" -c "Print :CFBundleIdentifier" \
     "$1/Contents/Info.plist" 2>/dev/null || echo "unknown"
 }
@@ -354,6 +356,82 @@ need_sudo() {
 # ──────────────────────────────────────────────
 # 微信进程管理
 # ──────────────────────────────────────────────
+_is_manager_process_line() {
+  local line="$1"
+  [[ "$line" == *"WeChat-Multi-Manager"* ]] && return 0
+  [[ "$line" == *"wechat-multi"* ]]        && return 0
+  [[ "$line" == *"WeChatMultiManager"* ]]  && return 0
+  [[ "$line" == *"Cursor Helper"* ]]      && return 0
+  [[ "$line" == *"extension-host"* ]]     && return 0
+  return 1
+}
+
+# 收集真实微信相关 PID（必须匹配 .app/Contents/MacOS，避免误匹配 Cursor/本工具目录）
+_collect_wechat_pids() {
+  local pid
+  WECHAT_PIDS=()
+
+  local patterns=(
+    '/Applications/WeChat\.app/Contents/MacOS'
+    '/Applications/微信\.app/Contents/MacOS'
+    '/Applications/WeChat[^/]*\.app/Contents/MacOS'
+    'WeChatAppEx'
+    'WeChat Helper'
+    'wxplayer'
+    'wxutility'
+  )
+
+  for pattern in "${patterns[@]}"; do
+    while IFS= read -r pid; do
+      [ -n "$pid" ] || continue
+      WECHAT_PIDS+=("$pid")
+    done < <(pgrep -if "$pattern" 2>/dev/null)
+  done
+
+  # 进程名恰好为 WeChat / 微信（兜底，不含 Cursor 等）
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    WECHAT_PIDS+=("$pid")
+  done < <(pgrep -ix WeChat 2>/dev/null; pgrep -ix 微信 2>/dev/null)
+
+  WECHAT_PIDS=(${(u)WECHAT_PIDS[@]})
+}
+
+_format_pid_line() {
+  local pid="$1" ps_line
+  ps_line="$(ps -p "$pid" -o pid=,command= 2>/dev/null | sed 's/^[[:space:]]*//')"
+  [ -n "$ps_line" ] || ps_line="$pid"
+  _is_manager_process_line "$ps_line" && return 1
+  echo "$ps_line"
+}
+
+_list_wechat_process_lines() {
+  _collect_wechat_pids
+  local pid line
+  for pid in "${WECHAT_PIDS[@]}"; do
+    line="$(_format_pid_line "$pid")" || continue
+    echo "$line"
+  done
+}
+
+_has_wechat_processes() {
+  local lines
+  lines="$(_list_wechat_process_lines)"
+  [ -n "$lines" ]
+}
+
+_kill_wechat_processes() {
+  pkill -x "WeChat"  2>/dev/null || true
+  pkill -x "微信"     2>/dev/null || true
+  pkill -if '/Applications/WeChat\.app/Contents/MacOS'        2>/dev/null || true
+  pkill -if '/Applications/微信\.app/Contents/MacOS'           2>/dev/null || true
+  pkill -if '/Applications/WeChat[^/]*\.app/Contents/MacOS'   2>/dev/null || true
+  pkill -if "WeChatAppEx"    2>/dev/null || true
+  pkill -if "WeChat Helper"  2>/dev/null || true
+  pkill -if "wxplayer"       2>/dev/null || true
+  pkill -if "wxutility"      2>/dev/null || true
+}
+
 wait_wechat_exit() {
   step "正在关闭所有微信相关进程..."
 
@@ -362,16 +440,11 @@ wait_wechat_exit() {
     return
   fi
 
-  # 关闭主进程和常见辅助进程
-  pkill -x "WeChat"       2>/dev/null || true
-  pkill -x "微信"          2>/dev/null || true
-  pkill -f "WeChatAppEx"  2>/dev/null || true
-  pkill -f "WeChat Helper" 2>/dev/null || true
+  _kill_wechat_processes
 
+  local i
   for i in {1..15}; do
-    # 用 pgrep -af 检测所有包含 WeChat / 微信 的进程
-    if ! pgrep -af "[Ww]e[Cc]hat" >/dev/null 2>&1 && \
-       ! pgrep -af "微信"          >/dev/null 2>&1; then
+    if ! _has_wechat_processes; then
       success "微信已退出。"
       return
     fi
@@ -380,8 +453,12 @@ wait_wechat_exit() {
 
   warn "微信相关进程似乎仍未完全退出（等待超时）。"
   info "残留进程："
-  pgrep -af "[Ww]e[Cc]hat" 2>/dev/null || true
+  _list_wechat_process_lines | while IFS= read -r line; do
+    info "  $line"
+  done
   echo ""
+  info "请先在 Dock 中右键每个微信图标 → 退出，或打开「活动监视器」结束 WeChat 相关进程。"
+  info "若确认已全部退出，可选 y 强制继续。"
   read "force_close?是否强制继续？[y/N]："
   if ! [[ "$force_close" =~ ^[Yy]$ ]]; then
     info "已取消。"
@@ -917,18 +994,21 @@ verify_app_launch() {
   return 1
 }
 
-# 复制后体积校验（允许 metadata 级微小误差，大目录要求 ≥98%）
+# 复制后体积校验（App 包允许更大误差；极小目录跳过）
 _verify_copy_size() {
   local src="$1" dst="$2" label="$3"
-  local src_kb dst_kb
+  local src_kb dst_kb min_pct=98
 
   src_kb="$(_du_kb "$src")"
   dst_kb="$(_du_kb "$dst")"
   [ -n "$src_kb" ] && [ -n "$dst_kb" ] || return 0
   [ "$src_kb" -eq 0 ] && return 0
 
-  if [ "$src_kb" -gt 100 ] && [ "$dst_kb" -lt $(( src_kb * 98 / 100 )) ]; then
-    warn "$label 体积校验失败（源 ${src_kb}KB → 副本 ${dst_kb}KB）"
+  # .app 体积因 APFS / xattr / du 统计时机可能差几个百分点
+  [[ "$src" == *.app || "$dst" == *.app ]] && min_pct=95
+
+  if [ "$src_kb" -gt 100 ] && [ "$dst_kb" -lt $(( src_kb * min_pct / 100 )) ]; then
+    warn "$label 体积校验失败（源 ${src_kb}KB → 副本 ${dst_kb}KB，要求 ≥${min_pct}%）"
     return 1
   fi
   info "$label 体积校验通过（${dst_kb}KB）"
@@ -1642,15 +1722,20 @@ verify_signature() {
 rollback_upgrade() {
   local target_app="$1"
   local backup_path="$2"
+  local app_name="${target_app:t}"
 
-  if [ -d "$backup_path" ] && [ ! -d "$target_app" ]; then
-    warn "正在还原旧副本..."
-    sudo mv "$backup_path" "$target_app" 2>/dev/null && \
-      info "已还原：$(basename "$target_app")" || \
-      warn "还原失败，旧副本保留在：$backup_path"
-  elif [ -d "$target_app" ]; then
-    # 新副本建了一半，清理掉
+  if [ -d "$target_app" ]; then
     sudo rm -rf "$target_app" 2>/dev/null || true
+  fi
+
+  if [ -d "$backup_path" ]; then
+    warn "正在还原旧副本..."
+    if sudo mv "$backup_path" "$target_app"; then
+      success "已还原：$app_name"
+    else
+      warn "还原失败，旧副本保留在：$backup_path"
+      warn "请使用菜单 14) 恢复升级失败留下的备份 手动处理。"
+    fi
   fi
 }
 
