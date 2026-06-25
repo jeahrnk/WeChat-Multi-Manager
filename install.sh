@@ -7,7 +7,6 @@
 
 set -u
 
-readonly VERSION="1.6.1"
 readonly REPO="jeahrnk/WeChat-Multi-Manager"
 readonly BRANCH="main"
 readonly BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
@@ -16,7 +15,7 @@ install_dir="${INSTALL_DIR:-$HOME/Applications/WeChat-Multi-Manager}"
 
 echo ""
 echo "======================================"
-echo " WeChat Multi Manager  v${VERSION}"
+echo " WeChat Multi Manager"
 echo "======================================"
 echo ""
 
