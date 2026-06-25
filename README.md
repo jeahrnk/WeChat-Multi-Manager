@@ -322,7 +322,6 @@ chmod +x wechat-multi.sh
 | `wechat-multi.sh` | 主脚本，终端运行 |
 | `WeChat-Multi-Manager.command` | 同上，支持双击运行 |
 | `install.sh` | 一键下载安装脚本 |
-| `CHANGELOG.md` | 版本更新记录 |
 
 ### 运行时数据
 
@@ -457,8 +456,7 @@ chmod +x wechat-multi.sh
 
 ## 版本与更新
 
-- [Releases](https://github.com/jeahrnk/WeChat-Multi-Manager/releases) — 最新版本与发布说明
-- [CHANGELOG.md](CHANGELOG.md) — 完整更新记录
+版本历史与更新说明见 [GitHub Releases](https://github.com/jeahrnk/WeChat-Multi-Manager/releases)。
 
 ---
 
