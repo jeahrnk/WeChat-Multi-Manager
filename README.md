@@ -54,6 +54,8 @@ curl -fsSL https://raw.githubusercontent.com/jeahrnk/WeChat-Multi-Manager/main/i
 
 默认安装到 `~/Applications/WeChat-Multi-Manager/`，包含终端版与双击版。
 
+> **更新脚本：** 再次执行上方一键安装命令即可覆盖更新已安装目录里的 `wechat-multi.sh` 与 `.command`，无需重装。
+
 自定义目录：`INSTALL_DIR=~/Desktop/WeChat-Multi-Manager curl -fsSL ... | zsh`
 
 **或手动下载：双击运行版**（不熟悉终端的用户）
@@ -394,7 +396,7 @@ chmod +x wechat-multi.sh
 <details>
 <summary><strong>提示微信未退出，但列出的进程是 Cursor / extension-host</strong></summary>
 
-旧版脚本可能把 Cursor 插件进程误判为微信。请更新到最新版，或在升级前暂时关闭 Cursor 对该目录的工作区。真正的微信进程路径应类似 `/Applications/WeChat-Work.app/Contents/MacOS/...`。
+更新到最新版即可（重新执行一键安装命令）。若仍误报，升级前可暂时关闭 Cursor。真正的微信进程路径类似 `/Applications/WeChat-Work.app/Contents/MacOS/...`。
 </details>
 
 <details>
@@ -457,6 +459,8 @@ chmod +x wechat-multi.sh
 ## 版本与更新
 
 版本历史与更新说明见 [GitHub Releases](https://github.com/jeahrnk/WeChat-Multi-Manager/releases)。
+
+已安装用户更新脚本：重新执行 [一键安装](#第一步下载) 命令，会覆盖 `~/Applications/WeChat-Multi-Manager/` 里的文件。
 
 ---
 
